@@ -18,7 +18,7 @@
         </span>
       </div>
 
-      <p class="text-surface-400 text-sm">Day 1 — 기초 세팅 완료</p>
+      <p class="text-surface-400 text-sm">기초 세팅 완료</p>
     </div>
   </div>
 </template>
