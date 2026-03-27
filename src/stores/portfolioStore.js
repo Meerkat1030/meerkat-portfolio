@@ -13,7 +13,7 @@ const state = reactive({
   isEditMode: false,
 
   profile: {
-    photo:     '/src/assets/images/profile.png',
+    photo:     null,
     name:      '이재홍',
     birthDate: '1999.10.30',
     phone:     '010-2321-6926',
