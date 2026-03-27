@@ -7,46 +7,69 @@
 
     <div class="profile-card__top">
       <img
-        v-if="state.profile.photo"
-        :src="state.profile.photo"
+        :src="profileImage"
         alt="프로필 사진"
         class="profile-card__photo"
       />
-      <div v-else class="profile-card__photo-placeholder">
-        <SvgIcon name="user" />
-      </div>
 
       <div class="profile-card__info">
         <div class="profile-card__info-row">
           <span class="profile-card__info-label">이름</span>
-          <span class="profile-card__info-value profile-card__name">{{ state.profile.name }}</span>
+          <span class="profile-card__info-value profile-card__name">
+            {{ state.profile.name }}
+          </span>
         </div>
+
         <div class="profile-card__info-row">
           <span class="profile-card__info-label">생년월일</span>
           <span class="profile-card__info-value">
             {{ state.profile.birthDate }}
-            <span v-if="calculatedAge !== null" class="profile-card__age">({{ calculatedAge }}세)</span>
+            <span v-if="calculatedAge !== null" class="profile-card__age">
+              ({{ calculatedAge }}세)
+            </span>
           </span>
         </div>
+
         <div class="profile-card__info-row">
           <span class="profile-card__info-label">연락처</span>
-          <span class="profile-card__info-value">{{ state.profile.phone }}</span>
+          <span class="profile-card__info-value">
+            {{ state.profile.phone }}
+          </span>
         </div>
+
         <div class="profile-card__info-row">
           <span class="profile-card__info-label">주소지</span>
-          <span class="profile-card__info-value">{{ state.profile.address }}</span>
+          <span class="profile-card__info-value">
+            {{ state.profile.address }}
+          </span>
         </div>
+
         <div class="profile-card__info-row">
           <span class="profile-card__info-label">학력</span>
-          <span class="profile-card__info-value">{{ state.profile.education }}</span>
+          <span class="profile-card__info-value">
+            {{ state.profile.education }}
+          </span>
         </div>
+
         <div class="profile-card__info-row">
           <span class="profile-card__info-label">이메일</span>
-          <a :href="`mailto:${state.profile.email}`" class="profile-card__info-link profile-card__info-link--truncate">{{ state.profile.email }}</a>
+          <a
+            :href="`mailto:${state.profile.email}`"
+            class="profile-card__info-link profile-card__info-link--truncate"
+          >
+            {{ state.profile.email }}
+          </a>
         </div>
+
         <div class="profile-card__info-row">
           <span class="profile-card__info-label">GitHub</span>
-          <a :href="state.profile.github" target="_blank" class="profile-card__info-link profile-card__info-link--truncate">{{ state.profile.github }}</a>
+          <a
+            :href="state.profile.github"
+            target="_blank"
+            class="profile-card__info-link profile-card__info-link--truncate"
+          >
+            {{ state.profile.github }}
+          </a>
         </div>
       </div>
     </div>
@@ -57,6 +80,7 @@
 import { computed } from 'vue'
 import { usePortfolioStore } from '@/stores/portfolioStore'
 import SvgIcon from '@/components/common/SvgIcon.vue'
+import defaultProfile from '@/assets/images/profile.png'
 
 export default {
   name: 'ProfileCard',
@@ -64,27 +88,45 @@ export default {
 
   setup() {
     const { state } = usePortfolioStore()
-
     const calculatedAge = computed(() => {
       const raw = state.profile.birthDate
       if (!raw) return null
+
       const normalized = raw.replace(/[.\-/]/g, '')
       if (normalized.length < 8) return null
+
       const year  = parseInt(normalized.slice(0, 4), 10)
       const month = parseInt(normalized.slice(4, 6), 10)
       const day   = parseInt(normalized.slice(6, 8), 10)
+
       if (isNaN(year) || isNaN(month) || isNaN(day)) return null
+
       const today = new Date()
       const birth = new Date(year, month - 1, day)
+
       if (birth > today) return null
+
       let age = today.getFullYear() - birth.getFullYear()
-      const notYet = today.getMonth() < birth.getMonth() ||
-        (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())
+
+      const notYet =
+        today.getMonth() < birth.getMonth() ||
+        (today.getMonth() === birth.getMonth() &&
+          today.getDate() < birth.getDate())
+
       if (notYet) age -= 1
+
       return age
     })
 
-    return { state, calculatedAge }
+    const profileImage = computed(() => {
+      return state.profile.photo || defaultProfile
+    })
+
+    return {
+      state,
+      calculatedAge,
+      profileImage,
+    }
   },
 }
 </script>

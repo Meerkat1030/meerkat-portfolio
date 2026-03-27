@@ -15,14 +15,10 @@
         <!-- 사진 -->
         <div class="profile-view__photo-wrapper">
           <img
-            v-if="displayProfile.photo"
-            :src="displayProfile.photo"
+            :src="profileImage"
             alt="프로필 사진"
             class="profile-view__photo"
           />
-          <div v-else class="profile-view__photo-placeholder">
-            <SvgIcon name="user" />
-          </div>
           <button v-if="isEditing" class="profile-view__photo-edit-btn" @click="triggerPhotoUpload">편집</button>
           <input ref="photoInputRef" type="file" accept="image/*" class="profile-view__photo-input" @change="handlePhotoChange" />
         </div>
@@ -55,6 +51,7 @@
 import { ref, reactive, computed } from 'vue'
 import { usePortfolioStore } from '@/stores/portfolioStore'
 import SvgIcon from '@/components/common/SvgIcon.vue'
+import defaultProfile from '@/assets/images/profile.png'
 
 const PROFILE_FIELDS = [
   { key: 'name',      label: '이름',    placeholder: '' },
@@ -125,6 +122,10 @@ export default {
       reader.readAsDataURL(file)
     }
 
+    const profileImage = computed(() => {
+      return state.profile.photo || defaultProfile
+    })
+
     return {
       state,
       displayProfile,
@@ -133,6 +134,7 @@ export default {
       photoInputRef,
       calculatedAge,
       profileFields: PROFILE_FIELDS,
+      profileImage,
       startEdit,
       saveEdit,
       cancelEdit,
