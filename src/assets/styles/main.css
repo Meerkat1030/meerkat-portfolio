@@ -1,0 +1,57 @@
+@import './variables.css';
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html, body {
+  width: 100%;
+  height: 100%;
+  zoom: 1;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  font-family: 'Pretendard', 'Apple SD Gothic Neo', sans-serif;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  transition: background-color 0.3s, color 0.3s;
+  font-size: var(--font-body);
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+
+#app {
+  width: 100%;
+  min-height: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: var(--bg-page);
+  transition: background-color 0.3s;
+}
+
+.main-content {
+  flex: 1 0 auto;
+  padding-top: var(--header-height);
+}
+
+button {
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: var(--font-body);
+}
+
+input, textarea, select {
+  font-family: inherit;
+  font-size: var(--font-body);
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}

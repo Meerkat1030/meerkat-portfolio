@@ -1,0 +1,48 @@
+:root {
+  /* 색상 */
+  --bg-page:           #F8FAFC;
+  --bg-card:           #FFFFFF;
+  --bg-card-secondary: #F1F5F9;
+  --border:            #E2E8F0;
+  --text-primary:      #1E293B;
+  --text-secondary:    #64748B;
+  --accent:            #3B82F6;
+  --accent-hover:      #2563EB;
+  --shadow:            0 0.3vh 0.6vh rgba(0,0,0,0.07);
+
+  /* 레이아웃 */
+  --page-padding-x: 5.5vw;
+  --header-height:  7vh;
+  --card-gap:       0.8vw;
+  --card-radius:    0.7vw;
+  --card-padding:   1.2vw;
+
+  /* 타이포그래피 - 1칸(약 22vw) 기준 줄바꿈 없이 들어가는 크기 */
+  --font-logo:    clamp(11px, 1.05vw, 18px);
+  --font-heading: clamp(10px, 0.85vw, 15px);
+  --font-name:    clamp(11px, 1vw,    17px);
+  --font-body:    clamp(9px,  0.72vw, 13px);
+  --font-label:   clamp(8px,  0.62vw, 11px);
+
+  /* 아이콘 */
+  --icon-size: clamp(12px, 1vw, 18px);
+
+  /* 버튼 */
+  --btn-height:  clamp(26px, 3vh, 42px);
+  --btn-radius:  clamp(13px, 1.5vh, 21px);
+  --btn-padding: 0 1.5vw;
+
+  /* 프로필 사진 - 1칸 기준, 3:4 비율 */
+  --photo-width:  clamp(38px, 4vw, 68px);
+  --photo-height: clamp(51px, 5.3vw, 90px);
+}
+
+[data-theme="dark"] {
+  --bg-page:           #0F172A;
+  --bg-card:           #1E293B;
+  --bg-card-secondary: #334155;
+  --border:            #475569;
+  --text-primary:      #F1F5F9;
+  --text-secondary:    #94A3B8;
+  --shadow:            0 0.3vh 0.6vh rgba(0,0,0,0.3);
+}
