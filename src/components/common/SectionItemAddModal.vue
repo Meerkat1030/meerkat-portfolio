@@ -1,9 +1,26 @@
 <template>
-  <BaseModal :title="`${sectionTitle} 항목 추가`" @close="$emit('close')">
+  <BaseModal
+    :title="isEditMode ? `${sectionTitle} 항목 편집` : `${sectionTitle} 항목 추가`"
+    @close="$emit('close')"
+  >
     <div v-for="field in visibleFields" :key="field" class="form-group">
       <label class="form-label">{{ fieldLabelMap[field] }}</label>
 
-      <div v-if="field === 'images'" class="image-upload-area">
+      <!-- tags: 쉼표로 구분 입력 -->
+      <div v-if="field === 'tags'" class="tags-input-area">
+        <input
+          v-model="tagsInput"
+          class="form-input"
+          type="text"
+          placeholder="쉼표로 구분 입력. 예) Vue.js, Java, Spring Boot"
+        />
+        <div v-if="parsedTags.length" class="tags-preview">
+          <span v-for="tag in parsedTags" :key="tag" class="tag-badge">{{ tag }}</span>
+        </div>
+      </div>
+
+      <!-- images -->
+      <div v-else-if="field === 'images'" class="image-upload-area">
         <button class="image-upload-btn" @click="triggerImageUpload">
           <SvgIcon name="plus" />
           이미지 추가
@@ -19,15 +36,32 @@
         </div>
       </div>
 
-      <textarea v-else-if="field === 'context'" v-model="formData[field]" class="form-textarea" rows="4" :placeholder="fieldPlaceholderMap[field]" />
-      <input v-else v-model="formData[field]" class="form-input" type="text" :placeholder="fieldPlaceholderMap[field]" />
+      <!-- context: textarea -->
+      <textarea
+        v-else-if="field === 'context'"
+        v-model="formData[field]"
+        class="form-textarea"
+        rows="4"
+        :placeholder="fieldPlaceholderMap[field]"
+      />
+
+      <!-- 나머지 텍스트 입력 -->
+      <input
+        v-else
+        v-model="formData[field]"
+        class="form-input"
+        type="text"
+        :placeholder="fieldPlaceholderMap[field]"
+      />
     </div>
 
     <p v-if="errorMessage" class="form-error">{{ errorMessage }}</p>
 
     <template #footer>
       <button class="btn btn--secondary" @click="$emit('close')">취소</button>
-      <button class="btn btn--primary" @click="handleSubmit">추가</button>
+      <button class="btn btn--primary" @click="handleSubmit">
+        {{ isEditMode ? '저장' : '추가' }}
+      </button>
     </template>
   </BaseModal>
 </template>
@@ -38,8 +72,25 @@ import BaseModal from '@/components/common/BaseModal.vue'
 import SvgIcon from '@/components/common/SvgIcon.vue'
 import { usePortfolioStore } from '@/stores/portfolioStore'
 
-const FIELD_LABEL_MAP = { title: '제목 *', subtitle: '부제목', context: '내용', startDate: '시작일', endDate: '종료일', images: '이미지' }
-const FIELD_PLACEHOLDER_MAP = { title: '제목을 입력하세요', subtitle: '부제목을 입력하세요', context: '내용을 입력하세요', startDate: 'YYYY.MM', endDate: 'YYYY.MM (미입력 시 현재)', images: '' }
+const FIELD_LABEL_MAP = {
+  title:     '제목 *',
+  subtitle:  '부제목',
+  context:   '내용',
+  startDate: '시작일',
+  endDate:   '종료일',
+  tags:      '사용 기술 (쉼표 구분)',
+  images:    '이미지',
+}
+
+const FIELD_PLACEHOLDER_MAP = {
+  title:     '제목을 입력하세요',
+  subtitle:  '부제목을 입력하세요',
+  context:   '내용을 입력하세요',
+  startDate: 'YYYY.MM',
+  endDate:   'YYYY.MM (미입력 시 현재)',
+  tags:      'Vue.js, Java, Spring Boot',
+  images:    '',
+}
 
 export default {
   name: 'SectionItemAddModal',
@@ -47,17 +98,42 @@ export default {
   props: {
     sectionId:   { type: String, required: true },
     sectionType: { type: String, required: true },
+    editItem:    { type: Object, default: null },
   },
   emits: ['close'],
 
   setup(props, { emit }) {
-    const { state, addSectionItem, getSectionFields } = usePortfolioStore()
+    const { state, addSectionItem, updateSectionItem, getSectionFields } = usePortfolioStore()
     const imageInputRef = ref(null)
     const errorMessage  = ref('')
-    const formData = reactive({ title: '', subtitle: '', context: '', startDate: '', endDate: '', images: [] })
+
+    const isEditMode = computed(() => props.editItem !== null)
+
+    // tags 배열 → 쉼표 구분 문자열로 초기화
+    const tagsInput = ref(
+      props.editItem?.tags?.join(', ') ?? ''
+    )
+
+    const parsedTags = computed(() =>
+      tagsInput.value
+        .split(',')
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0)
+    )
+
+    const formData = reactive({
+      title:     props.editItem?.title     ?? '',
+      subtitle:  props.editItem?.subtitle  ?? '',
+      context:   props.editItem?.context   ?? '',
+      startDate: props.editItem?.startDate ?? '',
+      endDate:   props.editItem?.endDate   ?? '',
+      images:    props.editItem?.images    ? [...props.editItem.images] : [],
+    })
 
     const visibleFields = computed(() => getSectionFields(props.sectionType))
-    const sectionTitle  = computed(() => state.sections.find((s) => s.id === props.sectionId)?.title ?? '')
+    const sectionTitle  = computed(() =>
+      state.sections.find((s) => s.id === props.sectionId)?.title ?? ''
+    )
 
     function triggerImageUpload() { imageInputRef.value?.click() }
 
@@ -72,16 +148,47 @@ export default {
     function removeImage(index) { formData.images.splice(index, 1) }
 
     function handleSubmit() {
-      if (!formData.title.trim()) { errorMessage.value = '제목을 입력해주세요.'; return }
+      if (!formData.title.trim()) {
+        errorMessage.value = '제목을 입력해주세요.'
+        return
+      }
+
       const itemData = {}
       visibleFields.value.forEach((field) => {
-        itemData[field] = field === 'images' ? [...formData.images] : formData[field]
+        if (field === 'images') {
+          itemData.images = [...formData.images]
+        } else if (field === 'tags') {
+          itemData.tags = [...parsedTags.value]
+        } else {
+          itemData[field] = formData[field]
+        }
       })
-      addSectionItem(props.sectionId, itemData)
+
+      if (isEditMode.value) {
+        updateSectionItem(props.sectionId, props.editItem.id, itemData)
+      } else {
+        addSectionItem(props.sectionId, itemData)
+      }
+
       emit('close')
     }
 
-    return { formData, visibleFields, sectionTitle, errorMessage, imageInputRef, fieldLabelMap: FIELD_LABEL_MAP, fieldPlaceholderMap: FIELD_PLACEHOLDER_MAP, triggerImageUpload, handleImageUpload, removeImage, handleSubmit }
+    return {
+      formData,
+      tagsInput,
+      parsedTags,
+      visibleFields,
+      sectionTitle,
+      errorMessage,
+      isEditMode,
+      imageInputRef,
+      fieldLabelMap: FIELD_LABEL_MAP,
+      fieldPlaceholderMap: FIELD_PLACEHOLDER_MAP,
+      triggerImageUpload,
+      handleImageUpload,
+      removeImage,
+      handleSubmit,
+    }
   },
 }
 </script>
@@ -100,7 +207,8 @@ export default {
   transition: border-color 0.2s;
 }
 
-.form-input:focus, .form-textarea:focus { outline: none; border-color: var(--accent); }
+.form-input:focus,
+.form-textarea:focus { outline: none; border-color: var(--accent); }
 
 .form-textarea {
   padding: 0.8vh 0.8vw;
@@ -115,6 +223,27 @@ export default {
 
 .form-error { font-size: var(--font-label); color: #EF4444; }
 
+/* tags 입력 영역 */
+.tags-input-area { display: flex; flex-direction: column; gap: 0.6vh; }
+
+.tags-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3vw;
+}
+
+.tag-badge {
+  display: inline-block;
+  padding: 0.2vh 0.5vw;
+  border-radius: 0.3vw;
+  background-color: #EFF6FF;
+  color: #1D4ED8;
+  font-size: var(--font-label);
+  font-weight: 500;
+  border: 1px solid #BFDBFE;
+}
+
+/* 이미지 업로드 */
 .image-upload-area { display: flex; flex-direction: column; gap: 0.8vh; }
 
 .image-upload-btn {

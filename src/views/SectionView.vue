@@ -7,31 +7,55 @@
           <h1 class="section-view__title">{{ currentSection?.title }}</h1>
           <p class="section-view__subtitle">{{ currentSection?.subtitle }}</p>
         </div>
-        <button
-          v-if="state.isEditMode"
-          class="section-view__add-btn"
-          @click="isItemAddModalOpen = true"
-        >
-          <SvgIcon name="plus" />
-          항목 추가
-        </button>
+        <div class="section-view__header-actions">
+          <button class="section-view__edit-mode-btn" @click="toggleEditMode">
+            {{ isEditMode ? '완료' : '편집' }}
+          </button>
+          <button v-if="!isEditMode" class="section-view__add-btn" @click="openAddModal">
+            <SvgIcon name="plus" />
+            항목 추가
+          </button>
+        </div>
       </div>
 
-      <div v-if="sectionItems.length === 0" class="section-view__empty">
+      <div v-if="displayItems.length === 0" class="section-view__empty">
         <p>등록된 항목이 없어요</p>
-        <p v-if="state.isEditMode">우측 하단 편집 버튼을 눌러 항목을 추가해보세요</p>
+        <p>우측 상단 버튼으로 항목을 추가해보세요</p>
       </div>
 
       <div v-else class="section-view__item-grid">
         <div
-          v-for="item in sectionItems"
+          v-for="(item, index) in displayItems"
           :key="item.id"
           class="section-item-card"
+          :class="{ 'section-item-card--dragging': dragIndex === index, 'section-item-card--edit': isEditMode }"
+          :draggable="isEditMode && isSkillsSection"
+          @dragstart="onDragStart(index)"
+          @dragover.prevent="onDragOver(index)"
+          @dragend="onDragEnd"
         >
+          <!-- 편집 모드 상단 툴바 -->
+          <div v-if="isEditMode" class="section-item-card__edit-toolbar">
+            <div v-if="isSkillsSection" class="section-item-card__drag-handle">
+              <SvgIcon name="menu" />
+              <span>드래그</span>
+            </div>
+            <div class="section-item-card__edit-actions">
+              <button class="section-item-card__edit-btn" @click="openEditModal(item)" title="수정">
+                <SvgIcon name="edit" />
+                <span>수정</span>
+              </button>
+              <button class="section-item-card__delete-btn" @click="removeSectionItem(sectionId, item.id)" title="삭제">
+                <SvgIcon name="close" />
+                <span>삭제</span>
+              </button>
+            </div>
+          </div>
+
           <div v-if="item.images?.length" class="section-item-card__images">
             <img
-              v-for="(image, index) in item.images"
-              :key="index"
+              v-for="(image, imgIdx) in item.images"
+              :key="imgIdx"
               :src="image"
               :alt="item.title"
               class="section-item-card__image"
@@ -39,18 +63,15 @@
           </div>
 
           <div class="section-item-card__body">
-            <div class="section-item-card__title-row">
-              <h3 class="section-item-card__title">{{ item.title }}</h3>
-              <button
-                v-if="state.isEditMode"
-                class="section-item-card__delete-btn"
-                @click="removeSectionItem(sectionId, item.id)"
-              >
-                <SvgIcon name="close" />
-              </button>
-            </div>
+            <h3 class="section-item-card__title">{{ item.title }}</h3>
             <p v-if="item.subtitle" class="section-item-card__subtitle">{{ item.subtitle }}</p>
+
+            <div v-if="item.tags?.length" class="section-item-card__tags">
+              <span v-for="tag in item.tags" :key="tag" class="section-item-card__tag">{{ tag }}</span>
+            </div>
+
             <p v-if="item.context" class="section-item-card__context">{{ item.context }}</p>
+
             <div v-if="item.startDate || item.endDate" class="section-item-card__date">
               <span>{{ item.startDate }}</span>
               <span v-if="item.startDate && item.endDate"> ~ </span>
@@ -63,19 +84,25 @@
     </div>
 
     <SectionItemAddModal
-      v-if="isItemAddModalOpen"
+      v-if="isModalOpen"
       :section-id="sectionId"
       :section-type="currentSection?.type"
-      @close="isItemAddModalOpen = false"
+      :edit-item="editingItem"
+      @close="closeModal"
     />
   </div>
 </template>
 
 <script>
-import { ref, computed } from 'vue'
+import { ref, computed, reactive, watch } from 'vue'
 import { usePortfolioStore } from '@/stores/portfolioStore'
 import SectionItemAddModal from '@/components/common/SectionItemAddModal.vue'
 import SvgIcon from '@/components/common/SvgIcon.vue'
+
+function parseDateToNumber(dateStr) {
+  if (!dateStr) return 0
+  return parseInt(dateStr.replace(/[.\-/]/g, ''), 10) || 0
+}
 
 export default {
   name: 'SectionView',
@@ -85,17 +112,106 @@ export default {
   },
 
   setup(props) {
-    const { state, removeSectionItem } = usePortfolioStore()
-    const isItemAddModalOpen = ref(false)
+    const { state, removeSectionItem, reorderSectionItems } = usePortfolioStore()
+    const isModalOpen = ref(false)
+    const editingItem = ref(null)
+    const isEditMode  = ref(false)
+    const dragIndex   = ref(null)
 
     const currentSection = computed(() =>
       state.sections.find((s) => s.id === props.sectionId)
     )
-    const sectionItems = computed(() =>
-      state.sectionItems[props.sectionId] ?? []
+
+    const isSkillsSection = computed(() => props.sectionId === 'skills')
+
+    // Skills 드래그용 로컬 복사본
+    const localSkillItems = reactive([...(state.sectionItems['skills'] ?? [])])
+
+    watch(
+      () => state.sectionItems['skills'],
+      (newItems) => {
+        if (!isEditMode.value) {
+          localSkillItems.splice(0, localSkillItems.length, ...(newItems ?? []))
+        }
+      },
+      { deep: true }
     )
 
-    return { state, currentSection, sectionItems, isItemAddModalOpen, removeSectionItem }
+    // 화면에 표시할 아이템 계산
+    const displayItems = computed(() => {
+      const rawItems = state.sectionItems[props.sectionId] ?? []
+
+      if (isSkillsSection.value) {
+        return localSkillItems
+      }
+
+      // Skills 외 섹션: 편집 모드 여부 무관하게 최신순 정렬
+      return [...rawItems].sort((a, b) =>
+        parseDateToNumber(b.startDate) - parseDateToNumber(a.startDate)
+      )
+    })
+
+    function toggleEditMode() {
+      if (isEditMode.value && isSkillsSection.value) {
+        // 편집 완료: Skills 순서 store에 반영
+        reorderSectionItems('skills', [...localSkillItems])
+      } else if (!isEditMode.value && isSkillsSection.value) {
+        // 편집 시작: 최신 store 데이터 동기화
+        localSkillItems.splice(0, localSkillItems.length, ...(state.sectionItems['skills'] ?? []))
+      }
+      isEditMode.value = !isEditMode.value
+    }
+
+    function onDragStart(index) {
+      if (!isEditMode.value || !isSkillsSection.value) return
+      dragIndex.value = index
+    }
+
+    function onDragOver(targetIndex) {
+      if (!isEditMode.value || !isSkillsSection.value) return
+      if (dragIndex.value === null || dragIndex.value === targetIndex) return
+      const moved = localSkillItems.splice(dragIndex.value, 1)[0]
+      localSkillItems.splice(targetIndex, 0, moved)
+      dragIndex.value = targetIndex
+    }
+
+    function onDragEnd() {
+      dragIndex.value = null
+    }
+
+    function openAddModal() {
+      editingItem.value = null
+      isModalOpen.value = true
+    }
+
+    function openEditModal(item) {
+      editingItem.value = item
+      isModalOpen.value = true
+    }
+
+    function closeModal() {
+      isModalOpen.value = false
+      editingItem.value = null
+    }
+
+    return {
+      state,
+      currentSection,
+      displayItems,
+      isSkillsSection,
+      isEditMode,
+      isModalOpen,
+      editingItem,
+      dragIndex,
+      toggleEditMode,
+      onDragStart,
+      onDragOver,
+      onDragEnd,
+      openAddModal,
+      openEditModal,
+      closeModal,
+      removeSectionItem,
+    }
   },
 }
 </script>
@@ -105,7 +221,7 @@ export default {
 
 .section-view__content {
   width: 100%;
-  padding: 2.5vh var(--page-padding-x) 4vh;
+  padding: 2.5vh var(--page-padding-x) 8vh;
   display: flex;
   flex-direction: column;
   gap: 2.5vh;
@@ -115,6 +231,7 @@ export default {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
+  gap: 1vw;
 }
 
 .section-view__title {
@@ -129,6 +246,34 @@ export default {
   margin-top: 0.4vh;
 }
 
+.section-view__header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5vw;
+  flex-shrink: 0;
+}
+
+/* 편집 버튼 - 완료 시 accent 색상 */
+.section-view__edit-mode-btn {
+  display: flex;
+  align-items: center;
+  height: var(--btn-height);
+  padding: var(--btn-padding);
+  border-radius: 0.5vw;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-size: var(--font-body);
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.section-view__edit-mode-btn:hover {
+  background-color: var(--accent);
+  color: #fff;
+}
+
 .section-view__add-btn {
   display: flex;
   align-items: center;
@@ -140,6 +285,7 @@ export default {
   color: #fff;
   font-size: var(--font-body);
   font-weight: 500;
+  white-space: nowrap;
   transition: background-color 0.2s;
 }
 
@@ -170,8 +316,78 @@ export default {
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
-  gap: 1vh;
-  transition: background-color 0.3s;
+  gap: 0.8vh;
+  transition: background-color 0.3s, opacity 0.2s;
+}
+
+/* 편집 모드 카드 테두리 강조 */
+.section-item-card--edit {
+  border-color: var(--accent);
+  border-style: dashed;
+}
+
+.section-item-card--dragging {
+  opacity: 0.45;
+}
+
+.section-item-card[draggable="true"] {
+  cursor: grab;
+  user-select: none;
+}
+
+.section-item-card[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+/* 편집 모드 툴바 */
+.section-item-card__edit-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 0.6vh;
+  border-bottom: 1px solid var(--border);
+  gap: 0.5vw;
+}
+
+.section-item-card__drag-handle {
+  display: flex;
+  align-items: center;
+  gap: 0.3vw;
+  color: var(--text-secondary);
+  font-size: var(--font-label);
+}
+
+.section-item-card__edit-actions {
+  display: flex;
+  gap: 0.3vw;
+  margin-left: auto;
+}
+
+.section-item-card__edit-btn,
+.section-item-card__delete-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.2vw;
+  height: clamp(22px, 2.2vh, 30px);
+  padding: 0 0.5vw;
+  border-radius: 0.3vw;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--font-label);
+  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
+}
+
+.section-item-card__edit-btn:hover {
+  background-color: #EFF6FF;
+  color: var(--accent);
+  border-color: #BFDBFE;
+}
+
+.section-item-card__delete-btn:hover {
+  background-color: #FEE2E2;
+  color: #EF4444;
+  border-color: #FCA5A5;
 }
 
 .section-item-card__images {
@@ -194,42 +410,39 @@ export default {
   gap: 0.6vh;
 }
 
-.section-item-card__title-row {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.5vw;
-}
-
 .section-item-card__title {
   font-size: var(--font-heading);
   font-weight: 700;
   color: var(--text-primary);
 }
 
-.section-item-card__delete-btn {
-  width: clamp(22px, 2vh, 32px);
-  height: clamp(22px, 2vh, 32px);
-  border-radius: 0.3vw;
-  border: 1px solid var(--border);
-  background: transparent;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-  transition: background-color 0.2s, color 0.2s, border-color 0.2s;
-}
-
-.section-item-card__delete-btn:hover {
-  background-color: #FEE2E2;
-  color: #EF4444;
-  border-color: #FCA5A5;
-}
-
 .section-item-card__subtitle {
   font-size: var(--font-label);
   color: var(--text-secondary);
+}
+
+.section-item-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3vw;
+}
+
+.section-item-card__tag {
+  display: inline-block;
+  padding: 0.2vh 0.5vw;
+  border-radius: 0.3vw;
+  background-color: #EFF6FF;
+  color: #1D4ED8;
+  font-size: var(--font-label);
+  font-weight: 500;
+  white-space: nowrap;
+  border: 1px solid #BFDBFE;
+}
+
+[data-theme="dark"] .section-item-card__tag {
+  background-color: #1E3A5F;
+  color: #93C5FD;
+  border-color: #2563EB;
 }
 
 .section-item-card__context {
@@ -242,11 +455,11 @@ export default {
 .section-item-card__date {
   font-size: var(--font-label);
   color: var(--text-secondary);
-  margin-top: 0.3vh;
 }
 
 @media (max-width: 768px) {
-  .section-view__content { padding: 2vh 4vw 4vh; }
+  .section-view__content { padding: 2vh 4vw 8vh; }
   .section-view__item-grid { grid-template-columns: 1fr; }
+  .section-view__header-actions { flex-direction: column; gap: 0.8vh; }
 }
 </style>
