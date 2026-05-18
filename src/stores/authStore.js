@@ -12,7 +12,9 @@ const state = reactive({
 async function signInWithGoogle() {
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
-    options: { redirectTo: window.location.origin },
+    options: {
+      redirectTo: window.location.origin,
+    },
   })
   if (error) console.error('로그인 실패:', error.message)
 }
@@ -23,13 +25,16 @@ async function signOut() {
 }
 
 function initAuth() {
-  supabase.auth.getSession().then(({ data: { session } }) => {
+  supabase.auth.onAuthStateChange((event, session) => {
     state.user          = session?.user ?? null
     state.isAdmin       = session?.user?.email === ADMIN_EMAIL
     state.isAuthLoading = false
-  })
 
-  supabase.auth.onAuthStateChange((_event, session) => {
+    if (event === 'SIGNED_IN' && window.location.hash.includes('access_token')) {
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+  })
+  supabase.auth.getSession().then(({ data: { session } }) => {
     state.user          = session?.user ?? null
     state.isAdmin       = session?.user?.email === ADMIN_EMAIL
     state.isAuthLoading = false
